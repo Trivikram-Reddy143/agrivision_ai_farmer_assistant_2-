@@ -1,0 +1,16 @@
+import crypto from 'node:crypto';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+import db from './db.js';
+const JWT_SECRET=process.env.JWT_SECRET || 'CHANGE_ME_IN_PRODUCTION';
+if(process.env.NODE_ENV==='production' && JWT_SECRET==='CHANGE_ME_IN_PRODUCTION') throw new Error('JWT_SECRET must be changed in production.');
+export const normalizeContact=(contact)=>{const c=String(contact||'').trim(); if(c.includes('@')) return c.toLowerCase(); const d=c.replace(/\D/g,''); return d.length===10?d:c;};
+export const contactMethod=(contact)=>{const c=normalizeContact(contact); if(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c)) return 'email'; if(/^\d{10}$/.test(c)) return 'phone'; return null;};
+export const hashOtp=(otp)=>crypto.createHash('sha256').update(String(otp)).digest('hex');
+export const createToken=(user)=>jwt.sign({sub:user.id},JWT_SECRET,{expiresIn:'24h'});
+export const authRequired=(req,res,next)=>{try{const h=req.headers.authorization||'';if(!h.startsWith('Bearer '))return res.status(401).json({message:'Authentication required.'});req.userId=jwt.verify(h.slice(7),JWT_SECRET).sub;next();}catch{return res.status(401).json({message:'Invalid or expired session.'});}};
+export const userByContact=(contact)=>{const c=normalizeContact(contact);return db.prepare('SELECT * FROM users WHERE email=? OR phone=?').get(c,c);};
+export const safeUser=(u)=>u?({id:u.id,email:u.email||'',phone:u.phone||'',name:u.name||'',language:u.language||'English',createdAt:u.created_at}):null;
+export const passwordOk=(p)=>typeof p==='string'&&p.length>=8;
+export const hashPassword=async p=>bcrypt.hash(p,12);
+export const verifyPassword=async(p,h)=>bcrypt.compare(p,h);
